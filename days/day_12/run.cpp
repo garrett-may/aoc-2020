@@ -6,6 +6,8 @@ struct Instruction{
     std::int32_t value;
 };
 
+using Point = std::array<std::int32_t, 2>;
+
 constexpr std::int32_t str_to_int(char const* str, char const** endptr) noexcept{
     std::int32_t i = 0;
     for(; *str != '\0'; ++str){
@@ -36,75 +38,43 @@ constexpr auto parse_instruction(char const* str) noexcept{
     return Instruction{action, value};
 }
 
-constexpr void translate(Instruction const& instruction, std::int32_t& x, std::int32_t& y) noexcept{
+constexpr void translate(Instruction const& instruction, Point& point) noexcept{
     switch(instruction.action){
-        case 'N': { y += instruction.value; break; }
-        case 'S': { y -= instruction.value; break; }
-        case 'E': { x += instruction.value; break; }
-        case 'W': { x -= instruction.value; break; }
+        case 'N': { point[1] += instruction.value; break; }
+        case 'S': { point[1] -= instruction.value; break; }
+        case 'E': { point[0] += instruction.value; break; }
+        case 'W': { point[0] -= instruction.value; break; }
         default: { break; }
     }
 }
 
-constexpr void rotate(Instruction const& instruction, std::int32_t& a, std::int32_t& b) noexcept{
+constexpr void rotate(Instruction const& instruction, Point& point) noexcept{
     auto sign = (instruction.action == 'R' ? 1 : -1);
     for(std::size_t i = 0; i < instruction.value; i += 90){
-        auto tmp = a;
-        a = b * sign;
-        b = tmp * -sign;
+        point = std::experimental::make_array(point[1] * sign, point[0] * -sign);
     }
 }
 
-constexpr auto orientation(std::int32_t a, std::int32_t b) noexcept{
-    return "NESW"[b * (b - 1) + a * (2 * a - 1)];
+constexpr void forward(Instruction const& instruction, Point& a, Point const& b) noexcept{
+    for(std::size_t i = 0; i < 2; ++i){
+        a[i] += instruction.value * b[i];
+    }
 }
 
-template<typename Array>
-constexpr auto incorrect_instructions(Array const& array) noexcept{
-    std::int32_t x = 0;
-    std::int32_t y = 0;
-    std::int32_t a = 1;
-    std::int32_t b = 0;
+template<bool waypoint_or_ship, typename Array>
+constexpr auto navigate(Array const& array, Point const& w) noexcept{
+    auto ship = std::experimental::make_array(0, 0);
+    auto waypoint = w;
     for(auto const* str : array){
         auto instruction = parse_instruction(str);
         switch(instruction.action){
-            case 'N':
-            case 'S':
-            case 'E':
-            case 'W': { translate(instruction, x, y); break; }
-            case 'L':
-            case 'R': { rotate(instruction, a, b); break; }
-            case 'F': { translate(Instruction{orientation(a, b), instruction.value}, x, y); break; }
-            default: { break; }
+            case 'N': case 'S': case 'E': case 'W': { translate(instruction, waypoint_or_ship ? waypoint : ship);   break; }
+            case 'L': case 'R':                     { rotate(instruction, waypoint);                                break; }
+            case 'F':                               { forward(instruction, ship, waypoint);                         break; }
+            default:                                {                                                               break; }
         }
     }
-    return abs(x) + abs(y);
-}
-
-
-template<typename Array>
-constexpr auto correct_instructions(Array const& array) noexcept{
-    std::int32_t x = 0;
-    std::int32_t y = 0;
-    std::int32_t a = 10;
-    std::int32_t b = 1;
-    for(auto const* str : array){
-        auto instruction = parse_instruction(str);
-        switch(instruction.action){
-            case 'N':
-            case 'S':
-            case 'E':
-            case 'W': { translate(instruction, a, b); break; }
-            case 'L':
-            case 'R': { rotate(instruction, a, b); break; }
-            case 'F': {
-                x += instruction.value * a;
-                y += instruction.value * b;
-            break; }
-            default: { break; }
-        }
-    }
-    return abs(x) + abs(y);
+    return abs(ship[0]) + abs(ship[1]);
 }
 
 constexpr static auto test_input = std::experimental::make_array(
@@ -891,8 +861,8 @@ constexpr static auto input = std::experimental::make_array(
     "F47"
 );
 
-constexpr static auto incorrect_distance = incorrect_instructions(input);
-constexpr static auto correct_distance = correct_instructions(input);
+constexpr static auto incorrect_distance = navigate<false>(input, std::experimental::make_array(1, 0));
+constexpr static auto correct_distance = navigate<true>(input, std::experimental::make_array(10, 1));
 
 int main(){
     std::printf("incorrect distance = %d\n", incorrect_distance);
